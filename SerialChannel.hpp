@@ -28,9 +28,6 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 #include <cstddef>
-#ifdef PROFILING
-#include "./profiling.hpp"
-#endif
 
 /**
  *  The SerialChannel class implements bidirectional communication on a serial (COM) port.
@@ -58,6 +55,9 @@ public:
      */
     SerialChannel (const std::string &filename, uint input_chunk_size = 0);
 
+    /** The destructor calls close() to preserve integrity; however close() should always be
+        called explicitly.
+     */
     ~SerialChannel();
 
     /**
@@ -96,9 +96,6 @@ public:
 private:
     std::string                 filename;
     void                       *_intern;
-
-    #ifdef PROFILING
-    #endif
 };
 
 #endif // __SERIAL_CHANNEL_HPP

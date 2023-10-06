@@ -26,7 +26,6 @@ THE SOFTWARE.
 #include <vector>
 #include <stdexcept>
 #include <cmath>
-#include <chrono>
 #include <boost/circular_buffer.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
@@ -49,8 +48,8 @@ public:
     typedef vector<byte_t>          write_buffer_t;
 
     InternalStruct(SerialChannel *owner_) 
-      : owner(owner_), 
-        hComm(0),
+      : owner(owner_),
+        hComm(NULL),
         output_buffer(DEFAULT_BUFFER_SIZE),
         input_buffer (DEFAULT_BUFFER_SIZE),
         disconnected (false),
@@ -102,13 +101,9 @@ SerialChannel::SerialChannel(const string &filename_, uint input_chunk_size_)
     intern->read_buffer.resize(input_chunk_size_ ? input_chunk_size_ : DEFAULT_INPUT_CHUNK_SIZE);
 }
 
-SerialChannel::~SerialChannel() 
+SerialChannel::~SerialChannel()
 {
-    try {
-        auto intern = static_cast<InternalStruct*>(_intern);
-	    if (intern->hComm) close();
-    }
-    catch(...) {}
+    close();
 }
 
 void
@@ -134,7 +129,6 @@ SerialChannel::open()
     if(!BuildCommDCB(spec.c_str(), &dcb)) throw winapi_error("BuildCommDCB()");
     dcb.fBinary = true;
 	/*
-
     dcb.BaudRate     	= baud;
 	dcb.fParity      	= (parity != 0) ? TRUE : FALSE;
 	dcb.fBinary      	= TRUE;
@@ -176,15 +170,17 @@ SerialChannel::close()
 {
     auto *intern = static_cast<InternalStruct*>(_intern);
 
-    intern->terminating = true;
-    intern->input_thread_cond .notify_all();
-    intern->output_thread_cond.notify_all();
-    intern->input_thread .join();
-    intern->output_thread.join();
+    if (intern->hComm)
+    {
+        intern->terminating = true;
+        intern->input_thread_cond.notify_all();
+        intern->output_thread_cond.notify_all();
+        intern->input_thread.join();
+        intern->output_thread.join();
 
-    if (CloseHandle(intern->hComm) == 0) throw winapi_error("CloseHandle()");
-
-    intern->hComm = 0;
+        if (CloseHandle(intern->hComm) == 0) throw winapi_error("CloseHandle()");
+        intern->hComm = NULL;
+    }
 }
 
 void
@@ -192,10 +188,9 @@ SerialChannel::send(const byte_t *buffer, size_t size)
 {
     auto *intern = static_cast<InternalStruct*>(_intern);
 
-    if (intern->output_error.size() > 0) throw runtime_error(string("SerialChannel sending error: ") + intern->input_error);
+    if (intern->output_error.size() > 0) throw runtime_error(string("SerialChannel sending error: ")+intern->input_error);
 
-    auto lock = mutex::scoped_lock{ intern->output_mutex };
-    //mutex::scoped_lock(output_mutex);
+    mutex::scoped_lock(output_mutex);
 
     if (intern->output_buffer.size() + size >= intern->output_buffer.capacity())
         throw runtime_error("Output buffer capacity exceeded");
@@ -212,8 +207,7 @@ SerialChannel::retrieve(size_t max_bytes)
 
     if (intern->input_error.size() > 0) throw runtime_error(string("SerialChannel receiving error: ")+intern->input_error);
 
-    auto lock = mutex::scoped_lock{  intern->input_mutex };
-    //mutex::scoped_lock(output_mutex);
+    mutex::scoped_lock(input_mutex);
 
     size_t size = (max_bytes > 0) ? min(max_bytes, intern->input_buffer.size()) : intern->input_buffer.size();
     vector<BYTE> buffer(size);
@@ -228,6 +222,17 @@ SerialChannel::retrieve(size_t max_bytes)
     
     return buffer;
 }
+
+/*
+void
+SerialChannel::sendNextQueuedOutputBuffer()
+{
+    buffer_t &buffer = output_queue.back();
+
+    if (WriteFileEx(hComm, &buffer[0], buffer.size(), &overlapped_out, &writeComplete) == 0) 
+        throw winapi_error("WriteFileEx() on COM port");
+}
+*/
 
 //--- InternalStruct methods --------------------------------------------------
 
@@ -349,7 +354,6 @@ InternalStruct::InputSlave::operator() ()
                 for (unsigned int i = 0; i < bytesRead; i ++) owner->input_buffer.push_front(owner->read_buffer[i]);
             }
 
-            Sleep(20);
 	    }
         catch (const std::exception &e) {
             owner->input_error = e.what();
