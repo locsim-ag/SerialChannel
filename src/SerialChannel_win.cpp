@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <vector>
 #include <stdexcept>
 #include <cmath>
+//#include <boost/circular_buffer.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
