@@ -15,7 +15,7 @@ class winapi_error : public std::exception {
             buffer, 1024, NULL);
          m_msg = m_msg + ": " + buffer;
       }
-      const char * what() const { return m_msg.c_str(); }
+      const char * what() const  noexcept { return m_msg.c_str(); }
    private:
 		 std::string m_msg;
 };
