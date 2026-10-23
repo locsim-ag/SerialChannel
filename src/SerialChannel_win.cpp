@@ -22,18 +22,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#define NOMINMAX        // preventing name clash
 #include <Windows.h>
 #include <vector>
-#include <stdexcept>
+#include <stdexcept> // std::runtime_error
 #include <cmath>
 #include <boost/circular_buffer.hpp>
+
+#define BOOST_PROVIDES_NESTED_LOCKS
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include "../SerialChannel.hpp"
 #include "winapi_error.hpp"
 
-using namespace std;
-using namespace boost;
+// better instantiate what needed, avoid dummping whole namspaces because of name clashes
+// here was using std; using boost; // from boost 1.88.0 on and maybe latest c++ standard
+// std::thread clashes with boost::thread
+// std::mutex with boost::mutex
+using boost::circular_buffer;
+using boost::thread;
+using boost::mutex;
+using boost::condition_variable;
+using boost::unique_lock;
+using boost::lock_guard;
+
+// from std namspece
+using std::vector;
+using std::string;
+using std::runtime_error;
+using std::min;
 
 static const size_t DEFAULT_BUFFER_SIZE      = 2048;
 static const size_t DEFAULT_INPUT_CHUNK_SIZE = 16;
